@@ -1,0 +1,16 @@
+{
+  "name": "boring-bot",
+  "private": true,
+  "type": "module",
+  "description": "AI-first modular monorepo",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "clean": "pnpm -r run clean",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "typescript-eslint": "^8.54.0"
+  }
+}

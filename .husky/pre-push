@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# Get changed .ts/.js files compared to the remote tracking branch
+REMOTE_REF=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)
+
+if [ -z "$REMOTE_REF" ]; then
+  # No upstream set — compare against the default branch
+  REMOTE_REF="origin/main"
+fi
+
+FILES=$(git diff --name-only "$REMOTE_REF"...HEAD -- '*.ts' '*.js' '*.mts' '*.mjs' 2>/dev/null)
+
+if [ -z "$FILES" ]; then
+  exit 0
+fi
+
+# Run eslint --fix, suppress all output, never block the push
+echo "$FILES" | xargs npx eslint --fix --no-warn-ignored 2>/dev/null
+
+# Stage any auto-fixed files so the user sees them as unstaged changes
+# (we intentionally do NOT commit — just fix in the working tree)
+exit 0

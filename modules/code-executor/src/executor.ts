@@ -1,4 +1,4 @@
-import { mkdirSync, createWriteStream, type WriteStream } from 'node:fs'
+import { mkdirSync, chmodSync, createWriteStream, type WriteStream } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import Docker from 'dockerode'
@@ -30,7 +30,7 @@ export class ExecutorService {
   private readonly logDir: string
   private readonly memoryBytes: number
   private readonly nanoCpus: number
-  private readonly getApiKey: () => Promise<string>
+  private readonly getCredentials: () => Promise<import('./types.js').Credentials>
   private readonly docker: Docker
 
   constructor(config: ExecutorServiceConfig) {
@@ -38,7 +38,7 @@ export class ExecutorService {
     this.logDir = config.logDir ?? DEFAULT_LOG_DIR
     this.memoryBytes = config.memoryBytes ?? DEFAULT_MEMORY
     this.nanoCpus = config.nanoCpus ?? DEFAULT_NANO_CPUS
-    this.getApiKey = config.getApiKey
+    this.getCredentials = config.getCredentials
 
     mkdirSync(this.logDir, { recursive: true })
     this.docker = new Docker()
@@ -47,7 +47,15 @@ export class ExecutorService {
   async *execute(options: ExecuteOptions): AsyncGenerator<StreamEvent> {
     const runId = randomUUID()
     const logPath = join(this.logDir, `${runId}.ndjson`)
-    const apiKey = await this.getApiKey()
+    const credentials = await this.getCredentials()
+
+    // Resolve the agent workspace directory. If the caller didn't provide one,
+    // auto-create a per-run directory so each run gets a clean slate.
+    const agentDir = options.agentDir ?? join(this.logDir, runId)
+    mkdirSync(agentDir, { recursive: true })
+    // 0o777 lets the container's node user (uid 1000) write even though it
+    // doesn't match the host uid. Acceptable for a local dev workspace.
+    chmodSync(agentDir, 0o777)
 
     const runnerConfig: RunnerConfig = {
       prompt: options.prompt,
@@ -59,15 +67,20 @@ export class ExecutorService {
       },
     }
 
-    const binds: string[] = options.contextPath
-      ? [`${options.contextPath}:/workspace/context:ro`]
-      : []
+    // agentDir is always mounted as the writable workspace root.
+    // contextPath (if given) is nested inside it as read-only reference material.
+    const binds: string[] = [`${agentDir}:/workspace:rw`]
+    if (options.contextPath) {
+      binds.push(`${options.contextPath}:/workspace/context:ro`)
+    }
 
     const container = await this.docker.createContainer({
       Image: this.image,
       Env: [
         `CLAUDE_RUN_CONFIG=${JSON.stringify(runnerConfig)}`,
-        `ANTHROPIC_API_KEY=${apiKey}`,
+        credentials.type === 'api_key'
+          ? `ANTHROPIC_API_KEY=${credentials.value}`
+          : `CLAUDE_CODE_OAUTH_TOKEN=${credentials.value}`,
       ],
       HostConfig: {
         Binds: binds,
@@ -160,7 +173,7 @@ export class ExecutorService {
         yield queue.shift()!
       }
 
-      yield { type: 'done', runId, exitCode, logPath }
+      yield { type: 'done', runId, exitCode, logPath, agentDir }
     } finally {
       await closeStream(logStream)
     }

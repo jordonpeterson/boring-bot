@@ -25,7 +25,7 @@ export interface RunEnvelope {
 export type StreamEvent =
   | { type: 'event'; runId: string; seq: number; ts: number; event: SDKMessage }
   | { type: 'error'; runId: string; text: string }
-  | { type: 'done';  runId: string; exitCode: number; logPath: string }
+  | { type: 'done';  runId: string; exitCode: number; logPath: string; agentDir: string }
 
 // Options for ExecutorService.execute()
 export interface ExecuteOptions {
@@ -34,9 +34,20 @@ export interface ExecuteOptions {
   allowedTools?: string[]
   maxTurns?: number
   permissionMode?: PermissionMode
+  /**
+   * Absolute host path to use as the agent's writable workspace.
+   * Mounted at /workspace inside the container — the agent cannot access
+   * anything above this directory. Auto-created per run if not provided.
+   */
+  agentDir?: string
   /** Absolute host path to mount read-only at /workspace/context */
   contextPath?: string
 }
+
+// Auth credentials injected into the runner container at launch time.
+export type Credentials =
+  | { type: 'api_key';     value: string }
+  | { type: 'oauth_token'; value: string }
 
 // Constructor config for ExecutorService.
 export interface ExecutorServiceConfig {
@@ -44,8 +55,8 @@ export interface ExecutorServiceConfig {
   logDir?: string       // default: '/tmp/boring-bot-logs'
   memoryBytes?: number  // default: 1 GiB
   nanoCpus?: number     // default: 2 vCPU (2e9)
-  /** Called at container launch time — never store the key in the image */
-  getApiKey: () => Promise<string>
+  /** Called at container launch time — never store credentials in the image */
+  getCredentials: () => Promise<Credentials>
 }
 
 // Extends ExecutorServiceConfig for the HTTP server.

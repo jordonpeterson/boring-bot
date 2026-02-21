@@ -4,13 +4,23 @@
   "type": "module",
   "description": "AI-first modular monorepo",
   "scripts": {
+    "play": "node --import tsx/esm scripts/play.ts",
+    "serve": "node --import tsx/esm scripts/serve.ts",
+    "start": "pnpm --filter @boring-bot/code-executor run start",
     "build": "pnpm -r run build",
     "clean": "pnpm -r run clean",
     "prepare": "husky"
   },
+  "dependencies": {
+    "@boring-bot/code-executor": "workspace:*",
+    "@boring-bot/code-executor-client": "workspace:*"
+  },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.47",
     "eslint": "^9.39.2",
+    "fastify": "^5.7.4",
     "husky": "^9.1.7",
+    "tsx": "^4.21.0",
     "typescript-eslint": "^8.54.0"
   }
 }

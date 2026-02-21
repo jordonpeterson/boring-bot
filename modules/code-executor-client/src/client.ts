@@ -31,7 +31,7 @@ export function prettyPrint(ev: StreamEvent): void {
 
   if (ev.type === 'done') {
     const status = ev.exitCode === 0 ? c.green : c.red
-    console.log(`\n${tag('done', status)} exit=${ev.exitCode}  log=${c.dim}${ev.logPath}${c.reset}`)
+    console.log(`\n${tag('done', status)} exit=${ev.exitCode}  workspace=${c.dim}${ev.agentDir}${c.reset}  log=${c.dim}${ev.logPath}${c.reset}`)
     return
   }
 

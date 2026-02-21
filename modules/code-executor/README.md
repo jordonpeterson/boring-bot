@@ -25,7 +25,7 @@ const executor = new ExecutorService({
   getApiKey: async () => process.env.ANTHROPIC_API_KEY!,
 })
 
-for await (const event of executor.execute({ prompt: 'List files in /workspace' })) {
+for await (const event of executor.execute({ prompt: 'What directory are you running in? Tell me just pwd' })) {
   console.log(event)
 }
 ```

@@ -13,6 +13,7 @@ RUN printf '{\n\
     "module": "NodeNext",\n\
     "moduleResolution": "NodeNext",\n\
     "strict": true,\n\
+    "skipLibCheck": true,\n\
     "outDir": "dist",\n\
     "rootDir": "src",\n\
     "declaration": true\n\
@@ -30,19 +31,22 @@ RUN npx tsc --project tsconfig.build.json
 # Non-root user prevents container privilege escalation
 FROM node:20-slim AS runtime
 
-# Create non-root user
-RUN useradd -m -u 1000 -s /bin/bash runner
-
-WORKDIR /workspace
+# Runner code lives in /app — separate from /workspace so bind-mounting
+# the agent workspace doesn't shadow the runner's dist/ and node_modules/.
+WORKDIR /app
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 
-RUN chown -R runner:runner /workspace
+# /workspace is the agent's working directory, mounted per run via Binds.
+RUN mkdir -p /workspace
 
-USER runner
+# node:20-slim ships with a 'node' user at uid 1000 — use it directly
+RUN chown -R node:node /app /workspace
+
+USER node
 
 ENV NODE_ENV=production
 
 # ANTHROPIC_API_KEY is injected at runtime via container environment
-ENTRYPOINT ["node", "dist/runner/index.js"]
+ENTRYPOINT ["node", "/app/dist/runner/index.js"]

@@ -7,13 +7,29 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@boring-bot/code-executor':
+        specifier: workspace:*
+        version: link:modules/code-executor
+      '@boring-bot/code-executor-client':
+        specifier: workspace:*
+        version: link:modules/code-executor-client
     devDependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.2.47
+        version: 0.2.47(zod@4.3.6)
       eslint:
         specifier: ^9.39.2
         version: 9.39.2
+      fastify:
+        specifier: ^5.7.4
+        version: 5.7.4
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript-eslint:
         specifier: ^8.54.0
         version: 8.54.0(eslint@9.39.2)(typescript@5.9.3)

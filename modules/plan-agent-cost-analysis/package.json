@@ -1,0 +1,20 @@
+{
+  "name": "@boring-bot/plan-agent-cost-analysis",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --test --import tsx/esm test/*.test.ts"
+  },
+  "dependencies": {
+    "@boring-bot/code-executor": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}

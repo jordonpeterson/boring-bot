@@ -1,0 +1,25 @@
+{
+  "name": "@boring-bot/code-executor",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "build:docker": "docker build -t boring-bot-runner:latest -f Dockerfile .",
+    "start": "node --import tsx/esm src/main.ts",
+    "test": "node --test --import tsx/esm test/line-transform.test.ts test/replay.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.47",
+    "dockerode": "^4.0.2",
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.29",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}

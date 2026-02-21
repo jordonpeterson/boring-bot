@@ -9,6 +9,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "build:docker": "docker build -t boring-bot-runner:latest -f Dockerfile .",
+    "start": "node --import tsx/esm src/main.ts",
     "test": "node --test --import tsx/esm test/line-transform.test.ts test/replay.test.ts"
   },
   "dependencies": {

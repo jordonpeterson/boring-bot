@@ -40,6 +40,16 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  modules/code-executor-client:
+    dependencies:
+      '@boring-bot/code-executor':
+        specifier: workspace:*
+        version: link:../code-executor
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   modules/repositories:
     devDependencies:
       typescript:

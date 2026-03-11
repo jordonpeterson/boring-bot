@@ -24,3 +24,10 @@ AI-first modular monorepo using pnpm workspaces and TypeScript.
 - TypeScript strict mode enabled via `tsconfig.base.json`
 - Each module extends `../../tsconfig.base.json`
 - Source in `src/`, output in `dist/`
+
+## Active Technologies
+- TypeScript 5.x, strict mode, ESM (`"type": "module"`) + Node.js LTS built-ins only (`child_process`, `fs/promises`, `readline`); Husky v9 (devDependency at repo root) (001-husky-local-pipeline)
+- `pipeline.config.json` (JSON, version-controlled); `.pipeline-runs.log` (NDJSON, gitignored) (001-husky-local-pipeline)
+
+## Recent Changes
+- 001-husky-local-pipeline: Added TypeScript 5.x, strict mode, ESM (`"type": "module"`) + Node.js LTS built-ins only (`child_process`, `fs/promises`, `readline`); Husky v9 (devDependency at repo root)

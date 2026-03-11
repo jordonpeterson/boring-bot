@@ -6,16 +6,38 @@ set +e
 REMOTE_REF=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)
 
 if [ -z "$REMOTE_REF" ] || ! git rev-parse "$REMOTE_REF" >/dev/null 2>&1; then
-  # No upstream or remote ref doesn't exist yet (first push) — skip
-  exit 0
+  # No upstream or remote ref doesn't exist yet (first push) — skip lint
+  :
+else
+  FILES=$(git diff --name-only "$REMOTE_REF"...HEAD -- '*.ts' '*.js' '*.mts' '*.mjs' 2>/dev/null || true)
+  if [ -n "$FILES" ]; then
+    echo "$FILES" | xargs npx eslint --fix --no-warn-ignored >/dev/null 2>&1 || true
+  fi
 fi
 
-FILES=$(git diff --name-only "$REMOTE_REF"...HEAD -- '*.ts' '*.js' '*.mts' '*.mjs' 2>/dev/null || true)
+# ── Pipeline gate (blocks push on failure) ──────────────────────────────────
+set -e
 
-if [ -z "$FILES" ]; then
-  exit 0
-fi
+ZERO="0000000000000000000000000000000000000000"
 
-echo "$FILES" | xargs npx eslint --fix --no-warn-ignored >/dev/null 2>&1 || true
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip deletions
+  [ "$local_sha" = "$ZERO" ] && continue
+
+  if [ "$remote_sha" = "$ZERO" ]; then
+    # New branch: diff against merge-base with main, or first commit
+    base=$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD)
+    diff_range="${base}..${local_sha}"
+  else
+    diff_range="${remote_sha}..${local_sha}"
+  fi
+
+  git diff "$diff_range" \
+    | PIPELINE_COMMIT_SHA="$local_sha" \
+      PIPELINE_BRANCH="$local_ref" \
+      node modules/pipeline/dist/index.js
+
+  [ $? -ne 0 ] && exit 1
+done
 
 exit 0

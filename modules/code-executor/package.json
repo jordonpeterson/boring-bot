@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "build:docker": "docker build -t boring-bot-runner:latest -f Dockerfile .",
     "start": "node --import tsx/esm src/main.ts",
-    "test": "node --test --import tsx/esm test/line-transform.test.ts test/replay.test.ts"
+    "test": "node --test --import tsx/esm test/line-transform.test.ts test/replay.test.ts test/clone-repos.test.ts test/checkout-repos.test.ts test/context-files.test.ts",
+    "test:integration": "RUN_INTEGRATION=1 node --test --import tsx/esm test/clone-repos.integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.47",

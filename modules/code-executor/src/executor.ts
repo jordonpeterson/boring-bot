@@ -1,8 +1,11 @@
-import { mkdirSync, createWriteStream, type WriteStream } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, createWriteStream, type WriteStream } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import Docker from 'dockerode'
 import { LineTransform } from './line-transform.js'
+import { writeContextFiles } from './context-files.js'
 import type {
   ExecuteOptions,
   ExecutorServiceConfig,
@@ -51,6 +54,8 @@ export class ExecutorService {
 
     const runnerConfig: RunnerConfig = {
       prompt: options.prompt,
+      repos: options.repos,
+      setupRepos: options.setupRepos,
       options: {
         resume: options.resume,
         allowedTools: options.allowedTools,
@@ -59,29 +64,44 @@ export class ExecutorService {
       },
     }
 
-    const binds: string[] = options.contextPath
-      ? [`${options.contextPath}:/workspace/context:ro`]
-      : []
+    const binds: string[] = []
+    let tempContextDir: string | undefined
 
-    const container = await this.docker.createContainer({
-      Image: this.image,
-      Env: [
-        `CLAUDE_RUN_CONFIG=${JSON.stringify(runnerConfig)}`,
-        `ANTHROPIC_API_KEY=${apiKey}`,
-      ],
-      HostConfig: {
-        Binds: binds,
-        Memory: this.memoryBytes,
-        NanoCpus: this.nanoCpus,
-        NetworkMode: 'bridge',
-        AutoRemove: true,
-      },
-    })
+    if (options.contextFiles !== undefined) {
+      // contextFiles was explicitly provided — suppress contextPath regardless of length.
+      if (options.contextFiles.length > 0) {
+        tempContextDir = mkdtempSync(join(tmpdir(), 'boring-bot-context-'))
+        try {
+          writeContextFiles(options.contextFiles, tempContextDir)
+        } catch (err) {
+          rmSync(tempContextDir, { recursive: true, force: true })
+          throw err
+        }
+        binds.push(`${tempContextDir}:/workspace/context:ro`)
+      }
+    } else if (options.contextPath) {
+      binds.push(`${options.contextPath}:/workspace/context:ro`)
+    }
 
-    // try-finally ensures logStream is always closed, even if the caller abandons
-    // the generator early or an error occurs during container setup.
+    // try-finally ensures logStream is always closed and tempContextDir is always
+    // removed — even if container creation fails or the caller abandons the generator.
     const logStream = createWriteStream(logPath)
     try {
+      const container = await this.docker.createContainer({
+        Image: this.image,
+        Env: [
+          `CLAUDE_RUN_CONFIG=${JSON.stringify(runnerConfig)}`,
+          `ANTHROPIC_API_KEY=${apiKey}`,
+        ],
+        HostConfig: {
+          Binds: binds,
+          Memory: this.memoryBytes,
+          NanoCpus: this.nanoCpus,
+          NetworkMode: 'bridge',
+          AutoRemove: true,
+        },
+      })
+
       // Async push queue — events are written to both the log file and the queue.
       const queue: StreamEvent[] = []
       let done = false
@@ -163,6 +183,9 @@ export class ExecutorService {
       yield { type: 'done', runId, exitCode, logPath }
     } finally {
       await closeStream(logStream)
+      if (tempContextDir) {
+        await rm(tempContextDir, { recursive: true, force: true })
+      }
     }
   }
 }

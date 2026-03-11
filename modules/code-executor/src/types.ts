@@ -364,6 +364,77 @@ export interface AIConfig {
   includePartialMessages?: boolean
 }
 
+/** Credentials for authenticating private repository clones. */
+export interface RepoCredentials {
+  /**
+   * Personal access token (GitHub PAT, GitLab token, Bitbucket app password, etc.)
+   * Used for HTTPS clones by injecting into the URL as `oauth2:<token>@<host>`.
+   * The token is stripped from the stored remote URL immediately after cloning.
+   */
+  token?: string
+}
+
+/**
+ * Controls what git operations the agent may perform on a cloned repository.
+ * - `'write'` (default): full access including push.
+ * - `'read'`: push is disabled at the git remote level after clone.
+ */
+export type RepoAccess = 'read' | 'write'
+
+/**
+ * Configuration for a single repository to be cloned into the agent workspace.
+ *
+ * @example Public repo, full access
+ * ```ts
+ * { url: 'https://github.com/owner/my-repo' }
+ * ```
+ *
+ * @example Private repo, read-only
+ * ```ts
+ * {
+ *   url: 'https://github.com/owner/private-repo',
+ *   access: 'read',
+ *   credentials: { token: process.env.GH_TOKEN! },
+ * }
+ * ```
+ */
+export interface RepoConfig {
+  /** HTTPS repository URL. */
+  url: string
+
+  /**
+   * Branch or tag to check out after cloning.
+   * Defaults to the remote's default branch.
+   */
+  branch?: string
+
+  /**
+   * Destination path relative to `/workspace`.
+   * Defaults to the repository name derived from the URL
+   * (last path segment with `.git` stripped).
+   *
+   * @example 'my-repo'  →  /workspace/my-repo
+   */
+  path?: string
+
+  /**
+   * Access level granted to the agent for this repository.
+   * @default 'write'
+   */
+  access?: RepoAccess
+
+  /** Authentication credentials for private repositories. */
+  credentials?: RepoCredentials
+
+  /**
+   * Shallow clone depth.
+   * Omit for a full clone.
+   *
+   * @example 1  →  git clone --depth 1 ...
+   */
+  depth?: number
+}
+
 /**
  * Repository setup configuration.
  *
@@ -393,6 +464,27 @@ export interface AIConfig {
  * ```
  */
 export interface RepoSetup {
+  /**
+   * Path to the repository relative to `/workspace`.
+   * Defaults to the workspace root (`/workspace`).
+   * Matches `RepoConfig.path` so a cloned repo and its setup entry pair naturally.
+   * @example 'backend'  →  /workspace/backend
+   */
+  path?: string
+
+  /**
+   * The base branch to create `branchName` from when it does not yet exist.
+   * @default HEAD of the current checkout
+   */
+  baseBranch?: string
+
+  /**
+   * Branch for the agent to work on.
+   * Strategy: `git checkout branchName` first; if absent, `git checkout -b branchName [baseBranch]`.
+   * Omit to leave the current branch unchanged.
+   */
+  branchName?: string
+
   /**
    * Path to a setup script within the repository.
    *
@@ -428,54 +520,40 @@ export interface RepoSetup {
  * ```ts
  * const execution: CodeExecution = {
  *   baseImage: { name: 'boring-bot-runner:latest' },
- *   branchName: 'feat/add-login-page',
- *   aiConfig: {
- *     apiKey: process.env.ANTHROPIC_API_KEY!,
- *   },
+ *   aiConfig: { apiKey: process.env.ANTHROPIC_API_KEY! },
  * }
  * ```
  *
- * @example Full configuration
+ * @example Multi-repo execution with per-repo branch setup
  * ```ts
  * const execution: CodeExecution = {
- *   baseBranch: 'develop',
  *   baseImage: { name: 'ghcr.io/acme/runner:v2' },
- *   branchName: 'fix/auth-timeout',
  *   aiConfig: {
  *     apiKey: process.env.ANTHROPIC_API_KEY!,
  *     model: 'claude-sonnet-4-6',
  *     permissionMode: 'acceptEdits',
- *     maxTurns: 100,
- *     maxBudgetUsd: 5,
- *     thinking: { type: 'adaptive' },
- *     allowedTools: ['Read', 'Write', 'Edit', 'Bash'],
- *     settingSources: ['project'],
- *     agents: {
- *       'test-runner': {
- *         description: 'Runs the test suite',
- *         prompt: 'Execute all tests and report results.',
- *         tools: ['Bash', 'Read'],
- *         model: 'haiku',
- *       },
+ *   },
+ *   repos: [
+ *     { url: 'https://github.com/acme/frontend', path: 'frontend' },
+ *     { url: 'https://github.com/acme/backend',  path: 'backend' },
+ *   ],
+ *   setupRepos: [
+ *     {
+ *       path: 'frontend',
+ *       branchName: 'feat/add-login-page',
+ *       baseBranch: 'main',
+ *       commands: ['pnpm install'],
  *     },
- *   },
- *   setupRepo: {
- *     commands: ['pnpm install', 'pnpm run build'],
- *   },
+ *     {
+ *       path: 'backend',
+ *       branchName: 'feat/add-login-page',
+ *       commands: ['go mod download'],
+ *     },
+ *   ],
  * }
  * ```
  */
 export interface CodeExecution {
-  /**
-   * The base branch that the work branch is created from.
-   *
-   * Use this to support repositories with different branching strategies
-   * (e.g. `main`, `develop`, `release/v2`).
-   *
-   * @default 'main'
-   */
-  baseBranch?: string
-
   /**
    * The container base image for this execution.
    *
@@ -483,17 +561,6 @@ export interface CodeExecution {
    * Claude Code agent SDK and required tooling.
    */
   baseImage: BaseImage
-
-  /**
-   * Git branch name for this execution.
-   *
-   * If the branch does not yet exist it will be created from `baseBranch`.
-   * If it already exists it will be checked out as-is.
-   *
-   * @example 'feat/add-login-page'
-   * @example 'fix/auth-timeout'
-   */
-  branchName: string
 
   /**
    * AI agent configuration controlling the Claude Code session.
@@ -505,12 +572,16 @@ export interface CodeExecution {
   aiConfig: AIConfig
 
   /**
-   * Optional repository setup steps executed before the agent starts.
-   *
-   * Use this to install dependencies, run build steps, apply migrations,
-   * or execute any other preparation the codebase requires.
+   * Per-repository setup steps (branch checkout, scripts, commands) executed
+   * before the agent starts. Each entry pairs with a cloned repo via `path`.
    */
-  setupRepo?: RepoSetup
+  setupRepos?: RepoSetup[]
+
+  /**
+   * Repositories to clone into the agent workspace before execution begins.
+   * Each repo is cloned to `/workspace/<name>` (or a custom `path`).
+   */
+  repos?: RepoConfig[]
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -525,6 +596,10 @@ type SerializableOptions = Pick<Options, 'cwd' | 'allowedTools' | 'maxTurns' | '
 // Shaped like query() params so the runner can call query({ prompt, options }) directly.
 export interface RunnerConfig {
   prompt: string
+  /** Repos to clone before the agent starts. Serialised from CodeExecution. */
+  repos?: RepoConfig[]
+  /** Repo checkout/setup config. Serialised from CodeExecution. */
+  setupRepos?: RepoSetup[]
   options?: SerializableOptions
 }
 
@@ -541,6 +616,35 @@ export type StreamEvent =
   | { type: 'error'; runId: string; text: string }
   | { type: 'done';  runId: string; exitCode: number; logPath: string }
 
+/**
+ * A single file to place inside `/workspace/context/` before the agent starts.
+ *
+ * The executor materialises these into a temporary directory that is bind-mounted
+ * read-only into the container. The agent can discover and read them at will but
+ * cannot modify them.
+ *
+ * @example
+ * ```ts
+ * { path: 'spec.md', content: '# Task\nFix the login bug described below...' }
+ * { path: 'schema/users.sql', content: 'CREATE TABLE users (...)' }
+ * ```
+ */
+export interface ContextFile {
+  /**
+   * Destination path relative to `/workspace/context/`.
+   * Must be non-empty, relative (no leading `/`), and resolve to a location
+   * inside the context directory. For example `'foo/../bar.md'` is valid
+   * (stays inside the directory), while `'../../etc/passwd'` is not.
+   * Parent directories are created automatically.
+   * @example 'spec.md'
+   * @example 'schema/users.sql'
+   */
+  path: string
+
+  /** File content as a UTF-8 string. */
+  content: string
+}
+
 // Options for ExecutorService.execute()
 export interface ExecuteOptions {
   prompt: string
@@ -548,8 +652,21 @@ export interface ExecuteOptions {
   allowedTools?: string[]
   maxTurns?: number
   permissionMode?: PermissionMode
-  /** Absolute host path to mount read-only at /workspace/context */
+  /**
+   * Files to place in `/workspace/context/` before the agent starts.
+   * The executor writes them to a temporary directory and bind-mounts it
+   * read-only into the container. Takes precedence over `contextPath`.
+   */
+  contextFiles?: ContextFile[]
+  /**
+   * Absolute host path to mount read-only at `/workspace/context/`.
+   * Use `contextFiles` instead when content is available programmatically.
+   */
   contextPath?: string
+  /** Repos to clone into the container workspace before the agent starts. */
+  repos?: RepoConfig[]
+  /** Repo checkout/setup to perform before the agent starts. */
+  setupRepos?: RepoSetup[]
 }
 
 // Constructor config for ExecutorService.

@@ -1,5 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { RunnerConfig } from '../types.js'
+import { cloneRepos } from './clone-repos.js'
+import { checkoutRepos } from './checkout-repos.js'
 
 const raw = process.env['CLAUDE_RUN_CONFIG']
 if (!raw) {
@@ -16,6 +18,16 @@ try {
 }
 
 async function main(): Promise<void> {
+  // Clone repos before starting the agent
+  if (config.repos?.length) {
+    await cloneRepos(config.repos)
+  }
+
+  // Checkout branches and run setup steps
+  if (config.setupRepos?.length) {
+    await checkoutRepos(config.setupRepos)
+  }
+
   let seq = 0
 
   const stream = query({

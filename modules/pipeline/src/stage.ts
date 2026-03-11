@@ -57,7 +57,8 @@ export async function runStage(
       }
     }, stage.timeout);
 
-    // Write diff to stdin then close
+    // Write diff to stdin then close. Ignore EPIPE — stage may not read stdin.
+    proc.stdin?.on('error', () => {});
     if (diff) {
       proc.stdin?.write(diff, 'utf8');
     }

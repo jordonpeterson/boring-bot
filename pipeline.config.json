@@ -1,0 +1,1 @@
+{"stages":[{"name":"Tests","command":"pnpm -r --if-present run test","timeout":120000}]}

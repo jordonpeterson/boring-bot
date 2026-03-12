@@ -103,3 +103,4 @@ The pipeline is always enforced. Git's native `--no-verify` flag still bypasses 
 - [data-model.md](data-model.md) — entity schemas for PipelineConfig, StageResult, PipelineResult, RunLog, DiffInput
 - [contracts/stage-contract.md](contracts/stage-contract.md) — stage input/output/exit-code contract
 - [quickstart.md](quickstart.md) — setup and daily use guide
+
